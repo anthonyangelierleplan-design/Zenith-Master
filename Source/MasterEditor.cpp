@@ -429,24 +429,19 @@ void ZenithContent::timerCallback()
     lcdOutI->set (lu (m.lufsOut.integrated.load()));
     lcdMatch->set (juce::String (m.matchDb.load(), 1));
 
-    // points orange : reglages que les macros deplacent en ce moment
-    const bool dyn = std::abs (proc.apvts.getRawParameterValue ("mDyn")->load() - 0.5f) > 0.02f;
-    const bool bri = std::abs (proc.apvts.getRawParameterValue ("mBri")->load() - 0.5f) > 0.02f;
-    const bool sq  = std::abs (proc.apvts.getRawParameterValue ("mSq")->load() - 0.5f) > 0.02f;
-    for (int i = 0; i < kNumP; ++i)
+    // macros : chaque potard deplace montre un arc orange jusqu'a la valeur reellement appliquee
     {
-        if (byId[i] == nullptr) continue;
-        bool a = false;
-        switch (i)
+        float v[kNumP], e[kNumP];
+        for (int i = 0; i < kNumP; ++i) v[i] = proc.apvts.getRawParameterValue (paramDefs()[i].id)->load();
+        Master::applyMacros (v, e);
+        for (int i = 0; i < kNumP; ++i)
         {
-            case p_ottAtk: case p_cmpAtk: case p_dL: case p_dM: case p_dH: a = dyn; break;
-            case p_uL: case p_uM: case p_uH: a = dyn || bri; break;
-            case p_gL: case p_gH: case p_lsG: case p_hsG: a = bri; break;
-            case p_tL: case p_tM: case p_tH: case p_fL: case p_fM: case p_fH: case p_ottRel: case p_cmpThr: case p_cmpRat: case p_cmpRel: a = sq; break;
-            default: break;
+            if (byId[i] == nullptr || i == p_mDyn || i == p_mBri || i == p_mSq) continue;
+            const auto& d = paramDefs()[i];
+            const bool moved = std::abs (e[i] - v[i]) > (d.mx - d.mn) * 0.004f;
+            byId[i]->setMacroValue (moved, e[i]);
+            byId[i]->setCvActive (moved);
         }
-        if (i == p_dL || i == p_dM || i == p_dH) a = dyn || sq;
-        byId[i]->setCvActive (a);
     }
 }
 

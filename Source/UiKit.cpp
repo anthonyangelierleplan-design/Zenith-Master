@@ -165,7 +165,7 @@ void OrageLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w,
 // ================================================================ potard
 KnobUnit::KnobUnit (juce::AudioProcessorValueTreeState& apvts, const juce::String& id, const juce::String& t,
                     const juce::String& lo, const juce::String& hi, int cvIdx)
-    : text (t), loText (lo), hiText (hi), cvIndex (cvIdx), attachment (apvts, id, slider)
+    : text (t), loText (lo), hiText (hi), cvIndex (cvIdx), attachmentParam (apvts.getParameter (id)), attachment (apvts, id, slider)
 {
     slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -182,6 +182,21 @@ KnobUnit::KnobUnit (juce::AudioProcessorValueTreeState& apvts, const juce::Strin
 void KnobUnit::resized() { slider.setBounds (getLocalBounds().withTrimmedBottom (16)); }
 
 void KnobUnit::setCvActive (bool a) { if (a != cvActive) { cvActive = a; repaint(); } }
+
+void KnobUnit::setMacroValue (bool active, double effective)
+{
+    const double range = slider.getMaximum() - slider.getMinimum();
+    if (active == macroOn && (! active || std::abs (effective - macroVal) < range * 0.0015)) return;
+    macroOn = active; macroVal = effective;
+    if (active)                                                                     // bulle au survol : valeur reglee -> valeur reelle
+    {
+        if (auto* prm = dynamic_cast<juce::RangedAudioParameter*> (attachmentParam))
+            slider.setTooltip ("Macros : " + prm->getText (prm->convertTo0to1 ((float) slider.getValue()), 0) + "  ->  "
+                        + prm->getText (prm->convertTo0to1 ((float) juce::jlimit (slider.getMinimum(), slider.getMaximum(), effective)), 0));
+    }
+    else slider.setTooltip ({});
+    repaint();
+}
 
 void KnobUnit::paint (juce::Graphics& g)
 {
@@ -217,6 +232,25 @@ void KnobUnit::paint (juce::Graphics& g)
         const float a = sa + pos * (ea - sa), rad = r * (numbered ? 0.74f : 0.93f);
         g.setColour (look::cvRing.withAlpha (0.95f * alpha));
         g.fillEllipse (c.x + rad * std::sin (a) - 2.f, c.y - rad * std::cos (a) - 2.f, 4.f, 4.f);
+    }
+    if (macroOn)                                                                    // ce que les macros font reellement a ce reglage
+    {
+        const double mn = slider.getMinimum(), mx = slider.getMaximum();
+        const float p0 = (float) slider.valueToProportionOfLength (slider.getValue());
+        const float p1 = (float) slider.valueToProportionOfLength (juce::jlimit (mn, mx, macroVal));
+        const bool beyond = macroVal < mn || macroVal > mx;
+        const float a0 = sa + p0 * (ea - sa), a1 = sa + p1 * (ea - sa), rad = r * (numbered ? 0.66f : 0.82f);
+        juce::Path arc;
+        arc.addCentredArc (c.x, c.y, rad, rad, 0.f, juce::jmin (a0, a1), juce::jmax (a0, a1), true);
+        g.setColour (look::cvRing.withAlpha (0.28f * alpha));
+        g.strokePath (arc, juce::PathStrokeType (5.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (look::cvRing.withAlpha (0.95f * alpha));
+        g.strokePath (arc, juce::PathStrokeType (2.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        // aiguille fantome a la valeur reelle (pleine si dans la plage, creuse si les macros poussent au-dela)
+        const juce::Point<float> tip (c.x + rad * std::sin (a1), c.y - rad * std::cos (a1));
+        g.setColour (juce::Colour (0xffffb36a).withAlpha (alpha));
+        if (beyond) g.drawEllipse (tip.x - 3.5f, tip.y - 3.5f, 7.f, 7.f, 1.6f);
+        else        g.fillEllipse (tip.x - 3.f, tip.y - 3.f, 6.f, 6.f);
     }
     g.setFont (font (getWidth() < 80 ? 10.f : 11.f));
     g.setColour (look::print.withAlpha (0.95f * alpha));

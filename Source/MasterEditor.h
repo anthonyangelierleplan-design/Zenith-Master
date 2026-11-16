@@ -60,6 +60,7 @@ private:
 
     ZenithProcessor& proc;
     OrageLookAndFeel laf;
+    juce::TooltipWindow tips { this, 350 };          // bulle "valeur reglee -> valeur reelle" des potards deplaces par les macros
     juce::Image panelTex;
     juce::Random rnd;
     float heatShown = 0.f, arcShown = 0.f;

@@ -227,33 +227,61 @@ public:
         inPkS = outPkS = 0.f;
     }
 
-    void setParams (const float* v)
+    // valeurs reellement appliquees apres les macros, dans les unites de chaque reglage (sans bornage).
+    // Sert au moteur ET a l'interface (arcs orange sur les potards deplaces par les macros).
+    static void applyMacros (const float* v, float* e)
     {
-        for (int i = 0; i < kNumP; ++i) p[i] = v[i];
-        const float I = p[p_intensity];
-        const float dyn = (p[p_mDyn] - 0.5f) * 2.f, bri = (p[p_mBri] - 0.5f) * 2.f, sq = (p[p_mSq] - 0.5f) * 2.f;
-
-        // ---- OTT
-        ottAtkMs = 0.2f * std::pow (150.f, p[p_ottAtk]) * std::pow (2.f, dyn * 1.5f);
-        ottRelMs = 15.f * std::pow (60.f, p[p_ottRel]) * std::pow (2.f, sq * 0.8f);
-        const float depth = p[p_ottDepth] * I;
+        for (int i = 0; i < kNumP; ++i) e[i] = v[i];
+        const float dyn = (v[p_mDyn] - 0.5f) * 2.f, bri = (v[p_mBri] - 0.5f) * 2.f, sq = (v[p_mSq] - 0.5f) * 2.f;
+        static const float ln2 = std::log (2.f);
+        e[p_ottAtk] = v[p_ottAtk] + dyn * 1.5f * ln2 / std::log (150.f);        // = attaque x 2^(1.5 dyn)
+        e[p_ottRel] = v[p_ottRel] + sq * 0.8f * ln2 / std::log (60.f);          // = release x 2^(0.8 sq)
         static const int iT[3] { p_tL, p_tM, p_tH }, iF[3] { p_fL, p_fM, p_fH }, iD[3] { p_dL, p_dM, p_dH }, iU[3] { p_uL, p_uM, p_uH }, iG[3] { p_gL, p_gM, p_gH };
-        static const float briGain[3] { -2.5f, 0.f, 2.5f }, briUp[3] { -0.4f, 0.f, 0.4f }, relScale[3] { 2.5f, 1.f, 0.5f };
+        static const float briGain[3] { -2.5f, 0.f, 2.5f }, briUp[3] { -0.4f, 0.f, 0.4f };
         for (int b = 0; b < 3; ++b)
         {
-            band[b].thr = p[iT[b]] - 10.f * sq;
-            band[b].flo = p[iF[b]] - 5.f * sq;
-            band[b].down = std::min (1.f, depth * p[iD[b]] * (1.f + 0.5f * sq) * (1.f - 0.35f * dyn));
-            band[b].up = std::min (1.f, depth * p[iU[b]] * (1.f - 0.4f * dyn) * (1.f + briUp[b] * bri));
-            band[b].gainDb = p[iG[b]] + briGain[b] * bri;
+            e[iT[b]] = v[iT[b]] - 10.f * sq;
+            e[iF[b]] = v[iF[b]] - 5.f * sq;
+            e[iD[b]] = v[iD[b]] * (1.f + 0.5f * sq) * (1.f - 0.35f * dyn);
+            e[iU[b]] = v[iU[b]] * (1.f - 0.4f * dyn) * (1.f + briUp[b] * bri);
+            e[iG[b]] = v[iG[b]] + briGain[b] * bri;
+        }
+        e[p_cmpThr] = v[p_cmpThr] - 6.f * sq;
+        e[p_cmpRat] = 1.f + (v[p_cmpRat] - 1.f) * (1.f + 0.5f * sq);
+        e[p_cmpAtk] = v[p_cmpAtk] * std::pow (2.f, dyn * 1.2f);
+        e[p_cmpRel] = v[p_cmpRel] * std::pow (2.f, sq * 0.8f);
+        e[p_lsG] = v[p_lsG] - 2.5f * bri;
+        e[p_hsG] = v[p_hsG] + 4.f * bri;
+    }
+
+    void setParams (const float* v)
+    {
+        float e[kNumP];
+        applyMacros (v, e);
+        for (int i = 0; i < kNumP; ++i) p[i] = v[i];
+        const float I = p[p_intensity];
+
+        // ---- OTT
+        ottAtkMs = 0.2f * std::pow (150.f, e[p_ottAtk]);
+        ottRelMs = 15.f * std::pow (60.f, e[p_ottRel]);
+        const float depth = p[p_ottDepth] * I;
+        static const int iT[3] { p_tL, p_tM, p_tH }, iF[3] { p_fL, p_fM, p_fH }, iD[3] { p_dL, p_dM, p_dH }, iU[3] { p_uL, p_uM, p_uH }, iG[3] { p_gL, p_gM, p_gH };
+        static const float relScale[3] { 2.5f, 1.f, 0.5f };
+        for (int b = 0; b < 3; ++b)
+        {
+            band[b].thr = e[iT[b]];
+            band[b].flo = e[iF[b]];
+            band[b].down = std::min (1.f, depth * e[iD[b]]);
+            band[b].up = std::min (1.f, depth * e[iU[b]]);
+            band[b].gainDb = e[iG[b]];
             const float aMs = std::max (0.1f, ottAtkMs), rMs = ottRelMs * relScale[b];
             band[b].aC = 1.f - std::exp (-1.f / (aMs * 0.001f * fs));
             band[b].rC = 1.f - std::exp (-1.f / (rMs * 0.001f * fs));
         }
         // ---- compresseur
-        cThr = p[p_cmpThr] - 6.f * sq;
-        cRat = 1.f + (p[p_cmpRat] - 1.f) * I * (1.f + 0.5f * sq);
-        const float cAtk = std::max (0.05f, p[p_cmpAtk] * std::pow (2.f, dyn * 1.2f)), cRel = p[p_cmpRel] * std::pow (2.f, sq * 0.8f);
+        cThr = e[p_cmpThr];
+        cRat = 1.f + (e[p_cmpRat] - 1.f) * I;
+        const float cAtk = std::max (0.05f, e[p_cmpAtk]), cRel = e[p_cmpRel];
         cAC = 1.f - std::exp (-1.f / (cAtk * 0.001f * fs));
         cRC = 1.f - std::exp (-1.f / (std::max (5.f, cRel) * 0.001f * fs));
         cMakeDb = (p[p_cmpAuto] > 0.5f ? -cThr * (1.f - 1.f / cRat) * 0.45f : 0.f) + p[p_cmpMk];
@@ -266,7 +294,7 @@ public:
         if (p[p_xo1] != xoCache1) { xoCache1 = p[p_xo1]; for (int c = 0; c < 2; ++c) sp1[c].set (xoCache1, fs); }
         const float xo2 = std::max (p[p_xo2], p[p_xo1] * 2.f);
         if (xo2 != xoCache2) { xoCache2 = xo2; for (int c = 0; c < 2; ++c) { sp2[c].set (xo2, fs); sp2lo[c].set (xo2, fs); } }
-        const float lsG = p[p_lsG] - 2.5f * bri, hsG = p[p_hsG] + 4.f * bri;
+        const float lsG = e[p_lsG], hsG = e[p_hsG];
         const float key = p[p_eqHpf] + 3.1f * p[p_lsF] + 5.7f * lsG + 7.3f * p[p_mdF] + 11.f * p[p_mdG] + 13.f * p[p_mdQ] + 17.f * hsG + 19.f * p[p_hsF] + 23.f * p[p_cmpSc];
         if (key != eqKey)
         {

@@ -48,12 +48,17 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void setCvActive (bool);
+    // valeur reellement appliquee (apres macros) : arc orange + aiguille fantome entre le reglage et cette valeur
+    void setMacroValue (bool active, double effective);
 
     DetentSlider slider;
     juce::String text, loText, hiText;
     int cvIndex;                                     // destination CV associee (ou -1)
     bool cvActive = false;
+    bool macroOn = false;
+    double macroVal = 0.0;
 private:
+    juce::AudioProcessorParameter* attachmentParam = nullptr;
     juce::AudioProcessorValueTreeState::SliderAttachment attachment;
 };
 
