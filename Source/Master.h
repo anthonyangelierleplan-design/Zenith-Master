@@ -6,10 +6,11 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include "Models.h"
 
 namespace tn
 {
-//  id        nom affiche        min    max   defaut  type(0 float,1 bool)  centre de courbure (0 = lineaire)
+//  id        nom affiche        min    max   defaut  type(0 float,1 bool,2 choix)  centre de courbure (0 = lineaire)
 #define TN_PARAMS(X) \
     X (in,        "Input",              -12.f,  12.f,   0.f,   0, 0.f)    \
     X (out,       "Output",             -12.f,   6.f,   0.f,   0, 0.f)    \
@@ -64,7 +65,23 @@ namespace tn
     X (limClip,   "Limiter Clip",         0.f,   1.f,   0.f,   0, 0.f)    \
     X (mDyn,      "Macro Dynamics",       0.f,   1.f,   0.5f,  0, 0.f)    \
     X (mBri,      "Macro Brilliance",     0.f,   1.f,   0.5f,  0, 0.f)    \
-    X (mSq,       "Macro Snappy/Squashy", 0.f,   1.f,   0.5f,  0, 0.f)
+    X (mSq,       "Macro Snappy/Squashy", 0.f,   1.f,   0.5f,  0, 0.f)    \
+    X (cmpModel,  "Comp Model",           0.f,   3.f,   0.f,   2, 0.f)    \
+    X (vmIn,      "Vari-Mu Input",      -12.f,  12.f,   0.f,   0, 0.f)    \
+    X (vmThr,     "Vari-Mu Threshold",    0.f,  10.f,   5.f,   0, 0.f)    \
+    X (vmTc,      "Vari-Mu Time Constant",0.f,   5.f,   1.f,   2, 0.f)    \
+    X (vmBal,     "Vari-Mu Balance",     -1.f,   1.f,   0.f,   0, 0.f)    \
+    X (fetIn,     "FET Input",          -12.f,  24.f,   0.f,   0, 0.f)    \
+    X (fetAtk,    "FET Attack",           1.f,   7.f,   3.f,   0, 0.f)    \
+    X (fetRel,    "FET Release",          1.f,   7.f,   7.f,   0, 0.f)    \
+    X (fetRat,    "FET Ratio",            0.f,   4.f,   0.f,   2, 0.f)    \
+    X (dcThr,     "Diode Comp Threshold",-20.f, 10.f,   0.f,   0, 0.f)    \
+    X (dcRat,     "Diode Comp Ratio",     0.f,   4.f,   1.f,   2, 0.f)    \
+    X (dcRec,     "Diode Comp Recovery",  0.f,   5.f,   1.f,   2, 0.f)    \
+    X (dlOn,      "Diode Limiter On",     0.f,   1.f,   0.f,   1, 0.f)    \
+    X (dlThr,     "Diode Limit Level",    4.f,  15.f,   8.f,   0, 0.f)    \
+    X (dlRec,     "Diode Limit Recovery", 0.f,   5.f,   1.f,   2, 0.f)    \
+    X (dlFast,    "Diode Limit Fast",     0.f,   1.f,   0.f,   1, 0.f)
 
 enum P
 {
@@ -83,6 +100,21 @@ inline const ParamDef* paramDefs()
 #undef TN_DEF
     };
     return defs;
+}
+
+// libelles des parametres "choix"
+inline std::vector<const char*> choiceNames (int i)
+{
+    switch (i)
+    {
+        case p_cmpModel: return { "CLEAN", "VARI-MU", "FET", "DIODE" };
+        case p_vmTc:     return { "1", "2", "3", "4", "5", "6" };
+        case p_fetRat:   return { "4", "8", "12", "20", "ALL" };
+        case p_dcRat:    return { "1.5", "2", "3", "4", "6" };
+        case p_dcRec:    return { "100", "400", "800", "1.5K", "A1", "A2" };
+        case p_dlRec:    return { "50", "100", "200", "800", "A1", "A2" };
+        default:         return {};
+    }
 }
 
 constexpr float kPi = 3.14159265358979f;
@@ -206,7 +238,7 @@ public:
 
     Master() { for (int i = 0; i < 3; ++i) { bandDown[i] = 0.f; bandUp[i] = 0.f; macroInfo[i] = 0.f; } }
 
-    int latency() const { return N + 1; }
+    int latency() const { return N + 1 + mdl::Os2::M; }
 
     void prepare (float sampleRate)
     {
@@ -223,6 +255,10 @@ public:
         for (auto& b : band) b = Band();
         grState = 0.f; limEnv = 0.f; xoCache1 = xoCache2 = -1.f; eqKey = 0;
         lufsIn.prepare (fs); lufsOut.prepare (fs);
+        os.prepare();
+        vm.prepare (2.f * fs); fet.prepare (2.f * fs); dc.prepare (2.f * fs); dl.prepare (2.f * fs);
+        for (int c = 0; c < 2; ++c) { osDly[c].assign ((size_t) mdl::Os2::M, 0.f); dryDly[c].assign ((size_t) mdl::Os2::M, 0.f); }
+        osPos = 0;
         bypassMix = 0.f; matchGainDb = 0.f; matchSm = 0.f;
         inPkS = outPkS = 0.f;
     }
@@ -252,6 +288,13 @@ public:
         e[p_cmpRel] = v[p_cmpRel] * std::pow (2.f, sq * 0.8f);
         e[p_lsG] = v[p_lsG] - 2.5f * bri;
         e[p_hsG] = v[p_hsG] + 4.f * bri;
+        // modeles de circuits
+        e[p_vmThr] = v[p_vmThr] + 2.f * sq;                                  // squashy : seuil plus bas
+        e[p_vmIn]  = v[p_vmIn] + 2.f * dyn;                                  // punch : les tubes chauffent plus
+        e[p_fetIn]  = v[p_fetIn] + 6.f * sq;                                 // squashy : on pousse l'entree
+        e[p_fetAtk] = v[p_fetAtk] - 1.5f * dyn;                              // punch : attaque plus lente (le transitoire passe)
+        e[p_fetRel] = v[p_fetRel] - 1.2f * sq;                               // squashy : recuperation plus lente
+        e[p_dcThr] = v[p_dcThr] - 6.f * sq;
     }
 
     void setParams (const float* v)
@@ -285,6 +328,14 @@ public:
         cAC = 1.f - std::exp (-1.f / (cAtk * 0.001f * fs));
         cRC = 1.f - std::exp (-1.f / (std::max (5.f, cRel) * 0.001f * fs));
         cMakeDb = (p[p_cmpAuto] > 0.5f ? -cThr * (1.f - 1.f / cRat) * 0.45f : 0.f) + p[p_cmpMk];
+        // ---- modeles de circuits (dans le compresseur) et limiteur a diodes
+        model = (int) std::lround (p[p_cmpModel]);
+        const auto ri = [this] (int id) { return (int) std::lround (p[id]); };
+        if (model == 1) vm.set (e[p_vmIn], e[p_vmThr], ri (p_vmTc), p[p_vmBal], p[p_cmpMk], I);
+        if (model == 2) fet.set (e[p_fetIn], p[p_cmpMk], e[p_fetAtk], e[p_fetRel], ri (p_fetRat), I);
+        if (model == 3) { dc.setComp (true, e[p_dcThr], ri (p_dcRat), ri (p_dcRec), p[p_cmpMk], I); dc.setLimit (false, 15.f, 0, false); }
+        dl.setComp (false, 0.f, 0, 0, 0.f, 1.f); dl.limiterOnlyColour();
+        dl.setLimit (true, p[p_dlThr], ri (p_dlRec), p[p_dlFast] > 0.5f);
         // ---- limiteur
         pushLin = dbToLin (p[p_limPush]);
         ceilLin = dbToLin (p[p_limCeil]);
@@ -323,7 +374,9 @@ public:
             lufsIn.push (dryL, dryR);
             peakIn = std::max (peakIn, std::max (std::fabs (dryL), std::fabs (dryR)));
             // chemin de bypass : entree retardee de la latence du limiteur, avec compensation de volume
-            const float bl = byp_(0, dryL), br = byp_(1, dryR);
+            float dL2 = dryDly[0][(size_t) osPos], dR2 = dryDly[1][(size_t) osPos];
+            dryDly[0][(size_t) osPos] = dryL; dryDly[1][(size_t) osPos] = dryR;
+            const float bl = byp_(0, dL2), br = byp_(1, dR2);
 
             float l = dryL * inLin, r = dryR * inLin;
 
@@ -341,14 +394,40 @@ public:
                 r = eqHs[1].run (eqMd[1].run (eqLs[1].run (eqHp[1].run (r))));
             }
             // ---- compresseur
-            float grNow = 0.f;
-            if (cmpOn)
+            float grNow = 0.f, dlGr = 0.f;
+            if (cmpOn && cmpMS) { const float m = 0.5f * (l + r), s = 0.5f * (l - r); l = m; r = s; }
+            if (cmpOn && model == 0) grNow = cmpProcess (l, r, cmpMS);
+            // modeles de circuits + limiteur a diodes : suréchantillonnage x2 (sinon simple retard de meme duree)
+            const bool modelOn = cmpOn && model > 0 && p[p_intensity] > 0.0005f, dlOnNow = p[p_dlOn] > 0.5f;
+            const bool decode = cmpOn && cmpMS;
+            if (modelOn || dlOnNow)
             {
-                if (cmpMS) { const float m = 0.5f * (l + r), s = 0.5f * (l - r); l = m; r = s; }
-                grNow = cmpProcess (l, r, cmpMS);
-                if (cmpMS) { const float m = l, s = r; l = m + s; r = m - s; }
+                float u[2][2];
+                os.upsample (0, l, u[0][0], u[0][1]); os.upsample (1, r, u[1][0], u[1][1]);
+                for (int k = 0; k < 2; ++k)
+                {
+                    float a = u[0][k], b = u[1][k], lg = 0.f;
+                    if (modelOn)
+                    {
+                        const float g = model == 1 ? vm.process (a, b) : model == 2 ? fet.process (a, b) : dc.process (a, b, lg);
+                        grNow = std::max (grNow, g);
+                    }
+                    if (decode) { const float m = a, s = b; a = m + s; b = m - s; }
+                    if (dlOnNow) { dl.process (a, b, lg); dlGr = std::max (dlGr, lg); }
+                    u[0][k] = a; u[1][k] = b;
+                }
+                l = os.downsample (0, u[0][0], u[0][1]); r = os.downsample (1, u[1][0], u[1][1]);
+            }
+            else if (decode) { const float m = l, s = r; l = m + s; r = m - s; }
+            {
+                // retard compensateur : les sorties des deux chemins restent alignees
+                const float dlL = osDly[0][(size_t) osPos], dlR = osDly[1][(size_t) osPos];
+                osDly[0][(size_t) osPos] = l; osDly[1][(size_t) osPos] = r;
+                if (! (modelOn || dlOnNow)) { l = dlL; r = dlR; }
+                osPos = (osPos + 1) % mdl::Os2::M;
             }
             grMax = std::max (grMax, grNow);
+            limMax = std::max (limMax, dlGr);
 
             // ---- clipper doux + limiteur
             l *= pushLin; r *= pushLin;
@@ -427,6 +506,11 @@ private:
     int dqHead = 0, dqTail = 0, wpos = 0; int64_t sampleIdx = 0; double avgSum = 0.0;
     std::vector<float> stRing;
     float bypassMix = 0.f, matchGainDb = 0.f, matchSm = 0.f, inPkS = 0.f, outPkS = 0.f;
+    // modeles
+    int model = 0, osPos = 0;
+    mdl::Os2 os;
+    mdl::VariMu vm; mdl::Fet fet; mdl::Diode dc, dl;
+    std::vector<float> osDly[2], dryDly[2];
 
     float byp_ (int c, float x) { auto& b = byp[c]; const float y = b[(size_t) wpos]; b[(size_t) wpos] = x; return y; }
     float delay_ (int c, float x) { auto& b = dly[c]; const float y = b[(size_t) wpos]; b[(size_t) wpos] = x; if (c == 1) wpos = (wpos + 1) % (N + 1); return y; }

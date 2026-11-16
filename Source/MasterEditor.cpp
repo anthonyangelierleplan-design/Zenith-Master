@@ -164,35 +164,68 @@ ZenithContent::ZenithContent (ZenithProcessor& p) : proc (p)
         toggle (eqPlate, p_eqOn, "EQ ON")->setBounds (x0 + 2 * kw + 6, y0 + 2 * kh + 36, 88, 26);
     }
 
-    // ---- COMPRESSEUR
+    // ---- COMPRESSEUR : 4 modeles (CLEAN, VARI-MU type 660, FET type 1176, DIODE type 33609)
     cmpPlate.setBounds (350, 478, 410, 372);
     {
         cmpPlate.addAndMakeVisible (vu);
-        vu.setBounds (14, 32, 382, 116);
-        const int kw = 76, kh = 100, y0 = 156;
-        knob (cmpPlate, p_cmpThr, "THRESH", "-40", "0")->setBounds (14, y0, kw, kh);
-        knob (cmpPlate, p_cmpRat, "RATIO", "1.5", "20")->setBounds (14 + kw, y0, kw, kh);
-        knob (cmpPlate, p_cmpAtk, "ATTACK", "0.1", "100")->setBounds (14 + 2 * kw, y0, kw, kh);
-        knob (cmpPlate, p_cmpRel, "RELEASE", "20", "1200")->setBounds (14 + 3 * kw, y0, kw, kh);
-        knob (cmpPlate, p_cmpKnee, "KNEE", "HARD", "SOFT")->setBounds (14 + 4 * kw, y0, kw, kh);
-        knob (cmpPlate, p_cmpSc, "SC HPF", "20", "400")->setBounds (14, y0 + kh + 4, kw, kh);
-        knob (cmpPlate, p_cmpMk, "MAKEUP", "-6", "+12")->setBounds (14 + kw, y0 + kh + 4, kw, kh);
-        toggle (cmpPlate, p_cmpAuto, "AUTO GAIN")->setBounds (14 + 2 * kw + 14, y0 + kh + 14, 124, 26);
-        toggle (cmpPlate, p_cmpMS, "MID / SIDE")->setBounds (14 + 2 * kw + 14, y0 + kh + 46, 124, 26);
-        toggle (cmpPlate, p_cmpOn, "COMP ON")->setBounds (14 + 2 * kw + 14, y0 + kh + 78, 124, 26);
+        vu.setBounds (14, 30, 382, 96);
+        selector (cmpPlate, p_cmpModel)->setBounds (12, 132, 280, 30);
+        toggle (cmpPlate, p_cmpOn, "COMP ON")->setBounds (300, 134, 96, 26);
+        toggle (cmpPlate, p_cmpMS, "MID / SIDE")->setBounds (300, 334, 96, 26);
+        const int kw = 76, kh = 96, y1 = 168, y2 = 266;
+        auto add = [this] (int m, juce::Component* c) { modelGroup[m].push_back (c); };
+        // CLEAN
+        add (0, knob (cmpPlate, p_cmpThr, "THRESH", "-40", "0"));          modelGroup[0].back()->setBounds (14, y1, kw, kh);
+        add (0, knob (cmpPlate, p_cmpRat, "RATIO", "1.5", "20"));          modelGroup[0].back()->setBounds (14 + kw, y1, kw, kh);
+        add (0, knob (cmpPlate, p_cmpAtk, "ATTACK", "0.1", "100"));        modelGroup[0].back()->setBounds (14 + 2 * kw, y1, kw, kh);
+        add (0, knob (cmpPlate, p_cmpRel, "RELEASE", "20", "1200"));       modelGroup[0].back()->setBounds (14 + 3 * kw, y1, kw, kh);
+        add (0, knob (cmpPlate, p_cmpKnee, "KNEE", "HARD", "SOFT"));       modelGroup[0].back()->setBounds (14 + 4 * kw, y1, kw, kh);
+        add (0, knob (cmpPlate, p_cmpSc, "SC HPF", "20", "400"));          modelGroup[0].back()->setBounds (14, y2, kw, kh);
+        add (0, knob (cmpPlate, p_cmpMk, "MAKEUP", "-6", "+12"));          modelGroup[0].back()->setBounds (14 + kw, y2, kw, kh);
+        add (0, toggle (cmpPlate, p_cmpAuto, "AUTO GAIN"));                modelGroup[0].back()->setBounds (300, 302, 96, 26);
+        // VARI-MU (tubes 6386, type 660)
+        add (1, knob (cmpPlate, p_vmIn, "INPUT", "-12", "+12"));           modelGroup[1].back()->setBounds (14, y1, kw, kh);
+        add (1, knob (cmpPlate, p_vmThr, "THRESHOLD", "0", "10"));         modelGroup[1].back()->setBounds (14 + kw, y1, kw, kh);
+        add (1, knob (cmpPlate, p_vmBal, "BALANCE", "-", "+"));            modelGroup[1].back()->setBounds (14 + 2 * kw, y1, kw, kh);
+        add (1, knob (cmpPlate, p_cmpMk, "OUTPUT", "-6", "+12"));          modelGroup[1].back()->setBounds (14 + 3 * kw, y1, kw, kh);
+        add (1, caption (cmpPlate, "TIME CONSTANT", { 14, y2 + 4, 276, 12 }));
+        add (1, selector (cmpPlate, p_vmTc));                              modelGroup[1].back()->setBounds (12, y2 + 18, 280, 32);
+        add (1, caption (cmpPlate, "1-4 : FIXED   /   5-6 : PROGRAM DEPENDENT", { 14, y2 + 56, 276, 12 }));
+        // FET (type 1176LN)
+        add (2, knob (cmpPlate, p_fetIn, "INPUT", "-12", "+24"));          modelGroup[2].back()->setBounds (14, y1, kw, kh);
+        add (2, knob (cmpPlate, p_cmpMk, "OUTPUT", "-6", "+12"));          modelGroup[2].back()->setBounds (14 + kw, y1, kw, kh);
+        add (2, knob (cmpPlate, p_fetAtk, "ATTACK", "SLOW", "FAST"));      modelGroup[2].back()->setBounds (14 + 2 * kw, y1, kw, kh);
+        add (2, knob (cmpPlate, p_fetRel, "RELEASE", "SLOW", "FAST"));     modelGroup[2].back()->setBounds (14 + 3 * kw, y1, kw, kh);
+        add (2, caption (cmpPlate, "RATIO", { 14, y2 + 4, 276, 12 }));
+        add (2, selector (cmpPlate, p_fetRat));                            modelGroup[2].back()->setBounds (12, y2 + 18, 280, 32);
+        add (2, caption (cmpPlate, "ALL = ALL BUTTONS IN", { 14, y2 + 56, 276, 12 }));
+        // DIODE (type 33609)
+        add (3, knob (cmpPlate, p_dcThr, "THRESH dBu", "-20", "+10"));     modelGroup[3].back()->setBounds (14, y1, kw, kh);
+        add (3, knob (cmpPlate, p_cmpMk, "GAIN", "-6", "+12"));            modelGroup[3].back()->setBounds (14 + kw, y1, kw, kh);
+        add (3, caption (cmpPlate, "RATIO", { 14, y2 - 2, 276, 12 }));
+        add (3, selector (cmpPlate, p_dcRat));                             modelGroup[3].back()->setBounds (12, y2 + 10, 280, 30);
+        add (3, caption (cmpPlate, "RECOVERY ms", { 14, y2 + 44, 276, 12 }));
+        add (3, selector (cmpPlate, p_dcRec));                             modelGroup[3].back()->setBounds (12, y2 + 56, 280, 30);
+        showModel ((int) proc.apvts.getRawParameterValue ("cmpModel")->load());
     }
 
-    // ---- LIMITEUR
+    // ---- LIMITEUR : limiteur a diodes (type 33609, colore) puis limiteur a anticipation (securite)
     limPlate.setBounds (770, 478, 300, 372);
     {
-        const int kw = 110, kh = 130;
-        knob (limPlate, p_limPush, "PUSH", "0", "+18")->setBounds (12, 32, kw, kh);
-        knob (limPlate, p_limCeil, "CEILING", "-6", "0")->setBounds (12 + kw, 32, kw, kh);
-        knob (limPlate, p_limRel, "RELEASE", "FAST", "SLOW")->setBounds (12, 32 + kh + 6, kw, kh);
-        knob (limPlate, p_limClip, "CLIP", "OFF", "MAX")->setBounds (12 + kw, 32 + kh + 6, kw, kh);
+        const int kw = 100, kh = 96;
+        knob (limPlate, p_limPush, "PUSH", "0", "+18")->setBounds (12, 28, kw, kh);
+        knob (limPlate, p_limCeil, "CEILING", "-6", "0")->setBounds (12 + kw, 28, kw, kh);
+        knob (limPlate, p_limRel, "RELEASE", "FAST", "SLOW")->setBounds (12, 124, kw, kh);
+        knob (limPlate, p_limClip, "CLIP", "OFF", "MAX")->setBounds (12 + kw, 124, kw, kh);
+        toggle (limPlate, p_limOn, "LIMITER ON")->setBounds (14, 224, 198, 22);
+        limPlate.labels.push_back ({ "DIODE LIMITER  (BEFORE BRICKWALL)", { 10, 252, 236, 12 } });
+        toggle (limPlate, p_dlOn, "DIODE ON")->setBounds (14, 266, 96, 22);
+        toggle (limPlate, p_dlFast, "FAST ATK")->setBounds (116, 266, 96, 22);
+        knob (limPlate, p_dlThr, "LEVEL dBu", "+4", "+15")->setBounds (8, 292, 92, 78);
+        limPlate.labels.push_back ({ "RECOVERY ms", { 104, 298, 140, 12 } });
+        selector (limPlate, p_dlRec)->setBounds (102, 312, 144, 30);
         limBar = new LedBar (LedBar::Reduction, 0.f, 12.f, "GR"); owned.emplace_back (limBar); limPlate.addAndMakeVisible (limBar);
-        limBar->setBounds (248, 36, 36, 260);
-        toggle (limPlate, p_limOn, "LIMITER ON")->setBounds (14, 328, 130, 26);
+        limBar->setBounds (254, 32, 36, 326);
     }
 
     // ---- SORTIE + LOUDNESS
@@ -237,6 +270,39 @@ LedToggle* ZenithContent::toggle (juce::Component& parent, P id, const juce::Str
     att.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, paramDefs()[id].id, *t));
     toggles.push_back (std::move (t));
     return toggles.back().get();
+}
+
+SegmentSelector* ZenithContent::selector (juce::Component& parent, P id)
+{
+    juce::StringArray names;
+    for (auto* n : choiceNames (id)) names.add (n);
+    auto* sel = new SegmentSelector (proc.apvts, paramDefs()[id].id, names);
+    owned.emplace_back (sel);
+    parent.addAndMakeVisible (sel);
+    return sel;
+}
+
+juce::Label* ZenithContent::caption (juce::Component& parent, const juce::String& text, juce::Rectangle<int> r)
+{
+    auto* l = new juce::Label ({}, text);
+    owned.emplace_back (l);
+    l->setFont (font (9.f));
+    l->setColour (juce::Label::textColourId, look::print.withAlpha (0.85f));
+    l->setJustificationType (juce::Justification::centredLeft);
+    l->setInterceptsMouseClicks (false, false);
+    l->setBorderSize ({});
+    l->setBounds (r);
+    parent.addAndMakeVisible (l);
+    return l;
+}
+
+void ZenithContent::showModel (int m)
+{
+    m = juce::jlimit (0, 3, m);
+    if (m == shownModel) return;
+    shownModel = m;
+    for (int g = 0; g < 4; ++g)
+        for (auto* c : modelGroup[g]) c->setVisible (g == m);
 }
 
 // ---------------------------------------------------------------- facade
@@ -428,6 +494,8 @@ void ZenithContent::timerCallback()
     lcdOutS->set (lu (m.lufsOut.shortTerm.load()));
     lcdOutI->set (lu (m.lufsOut.integrated.load()));
     lcdMatch->set (juce::String (m.matchDb.load(), 1));
+
+    showModel ((int) std::lround (proc.apvts.getRawParameterValue ("cmpModel")->load()));
 
     // macros : chaque potard deplace montre un arc orange jusqu'a la valeur reellement appliquee
     {

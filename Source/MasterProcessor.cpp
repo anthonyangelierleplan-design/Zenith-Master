@@ -22,6 +22,10 @@ juce::String valueText (int i, float v)
         case p_cmpAtk: case p_cmpRel: case p_limRel: return (v < 10.f ? juce::String (v, 1) : juce::String ((int) std::round (v))) + " ms";
         case p_ottAtk:   { const float ms = 0.2f * std::pow (150.f, v); return (ms < 10.f ? juce::String (ms, 1) : juce::String ((int) std::round (ms))) + " ms"; }
         case p_ottRel:   return juce::String ((int) std::round (15.f * std::pow (60.f, v))) + " ms";
+        case p_vmIn: case p_fetIn: return (v > 0.05f ? "+" : "") + juce::String (v, 1) + " dB";
+        case p_dcThr: case p_dlThr: return (v > 0.05f ? "+" : "") + juce::String (v, 1) + " dBu";
+        case p_vmThr: case p_fetAtk: case p_fetRel: return juce::String (v, 1);
+        case p_vmBal: { const int pc = (int) std::round (v * 100.f); return (pc > 0 ? "+" : "") + juce::String (pc) + " %"; }
         case p_mDyn: case p_mBri: case p_mSq:
         {
             const int pc = (int) std::round ((v - 0.5f) * 200.f);
@@ -41,6 +45,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout ZenithProcessor::makeLayout(
         const juce::ParameterID pid { d.id, 1 };
         if (d.kind == 1)
             layout.add (std::make_unique<juce::AudioParameterBool> (pid, d.name, d.def > 0.5f));
+        else if (d.kind == 2)
+        {
+            juce::StringArray names;
+            for (auto* n : choiceNames (i)) names.add (n);
+            layout.add (std::make_unique<juce::AudioParameterChoice> (pid, d.name, names, (int) d.def));
+        }
         else
         {
             juce::NormalisableRange<float> r (d.mn, d.mx);
@@ -136,6 +146,22 @@ const std::vector<Factory>& factory()
             { p_intensity, 1.f }, { p_ottDepth, 1.f }, { p_dL, .85f }, { p_dM, .9f }, { p_dH, .85f }, { p_uL, .7f }, { p_uM, .85f }, { p_uH, .9f },
             { p_ottAtk, .2f }, { p_ottRel, .25f }, { p_mSq, .88f }, { p_cmpThr, -32.f }, { p_cmpRat, 12.f }, { p_cmpAtk, 3.f }, { p_cmpRel, 60.f },
             { p_limPush, 14.f }, { p_limClip, .7f } } },
+        // ---- modeles de circuits
+        { "Vari-Mu Glue (660)", {
+            { p_intensity, .7f }, { p_ottDepth, .4f }, { p_cmpModel, 1.f }, { p_vmThr, 5.5f }, { p_vmTc, 1.f }, { p_vmIn, 2.f }, { p_cmpMk, 3.f },
+            { p_limPush, 3.f } } },
+        { "Vari-Mu Breathing (TC6)", {
+            { p_intensity, .85f }, { p_ottDepth, .6f }, { p_cmpModel, 1.f }, { p_vmThr, 7.f }, { p_vmTc, 5.f }, { p_vmIn, 4.f }, { p_vmBal, .25f },
+            { p_cmpMk, 5.f }, { p_limPush, 4.f } } },
+        { "FET All Buttons", {
+            { p_intensity, .9f }, { p_ottDepth, .8f }, { p_cmpModel, 2.f }, { p_fetRat, 4.f }, { p_fetIn, 8.f }, { p_fetAtk, 5.f }, { p_fetRel, 6.f },
+            { p_cmpMk, 4.f }, { p_limPush, 5.f }, { p_limClip, .3f } } },
+        { "FET Snap 4:1", {
+            { p_intensity, .7f }, { p_ottDepth, .5f }, { p_cmpModel, 2.f }, { p_fetRat, 0.f }, { p_fetIn, 4.f }, { p_fetAtk, 3.f }, { p_fetRel, 6.f },
+            { p_cmpMk, 3.f }, { p_limPush, 3.f } } },
+        { "Diode Master Bus", {
+            { p_intensity, .7f }, { p_ottDepth, .5f }, { p_cmpModel, 3.f }, { p_dcThr, -6.f }, { p_dcRat, 1.f }, { p_dcRec, 4.f }, { p_cmpMk, 4.f },
+            { p_dlOn, 1.f }, { p_dlThr, 10.f }, { p_dlRec, 4.f }, { p_limPush, 3.f } } },
     };
     return f;
 }

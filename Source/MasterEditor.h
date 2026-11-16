@@ -49,6 +49,9 @@ private:
     void buildPanelTex();
     KnobUnit* knob (juce::Component& parent, tn::P id, const juce::String& text, const char* lo = "", const char* hi = "", double detent = -1e30);
     LedToggle* toggle (juce::Component& parent, tn::P id, const juce::String& text);
+    SegmentSelector* selector (juce::Component& parent, tn::P id);
+    juce::Label* caption (juce::Component& parent, const juce::String& text, juce::Rectangle<int> r);
+    void showModel (int m);
     void drawTube (juce::Graphics&, juce::Rectangle<float>, float glow, float arc);
     void drawBolt (juce::Graphics&, juce::Point<float>, juce::Point<float>);
     void stepPreset (int dir);
@@ -73,6 +76,8 @@ private:
     std::vector<std::unique_ptr<LedToggle>> toggles;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> att;
     std::vector<std::unique_ptr<juce::Component>> owned;
+    std::vector<juce::Component*> modelGroup[4];                     // reglages propres a chaque modele de compresseur
+    int shownModel = -1;
 
     LedBar *inBar = nullptr, *outBar = nullptr, *limBar = nullptr, *bandDown[3] {}, *bandUp[3] {};
     VuMeter vu;
