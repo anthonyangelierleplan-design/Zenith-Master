@@ -81,7 +81,8 @@ namespace tn
     X (dlOn,      "Diode Limiter On",     0.f,   1.f,   0.f,   1, 0.f)    \
     X (dlThr,     "Diode Limit Level",    4.f,  15.f,   8.f,   0, 0.f)    \
     X (dlRec,     "Diode Limit Recovery", 0.f,   5.f,   1.f,   2, 0.f)    \
-    X (dlFast,    "Diode Limit Fast",     0.f,   1.f,   0.f,   1, 0.f)
+    X (dlFast,    "Diode Limit Fast",     0.f,   1.f,   0.f,   1, 0.f)    \
+    X (lufsTgt,   "Loudness Target",      0.f,   3.f,   2.f,   2, 0.f)
 
 enum P
 {
@@ -113,6 +114,7 @@ inline std::vector<const char*> choiceNames (int i)
         case p_dcRat:    return { "1.5", "2", "3", "4", "6" };
         case p_dcRec:    return { "100", "400", "800", "1.5K", "A1", "A2" };
         case p_dlRec:    return { "50", "100", "200", "800", "A1", "A2" };
+        case p_lufsTgt:  return { "-14 STREAM", "-11 CD", "-9 CLUB", "-6 LOUD" };
         default:         return {};
     }
 }

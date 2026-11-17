@@ -17,3 +17,10 @@ Pas de dry/wet : le bouton INTENSITY regle la force du traitement (pas de proble
 - Fenetre redimensionnable. Presets utilisateur : `%APPDATA%\Foudre Audio\Zenith\Presets`.
 
 Compilation : pousser sur GitHub, onglet Actions -> artefacts `Zenith-VST3-Windows` et `Zenith-Standalone-Windows`.
+
+## Interface (v2 "deluxe")
+- Cockpit : VU de compression + activite par etage | INTENSITY + 3 macros | loudness (cible -14/-11/-9/-6 LUFS), sortie.
+- Chaine de 5 tuiles cliquables (INPUT, OTT, EQ, COMP, LIMITER) : chaque tuile ouvre son tiroir en bas.
+- Facade du compresseur propre a chaque modele (martele pour VARI-MU, noir et alu pour FET, bleu acier pour DIODE).
+- 3 themes (bouton en haut a droite, memorise) : ORIGINAL (Orage), MINUIT (Zephyr), ZENITH (couleurs d'origine).
+- Plaques vissees, grilles d'aeration, flancs en bois, potards 3D, lampes qui chauffent avec le traitement, courbe d'EQ reelle.
